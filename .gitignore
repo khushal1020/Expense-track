@@ -1,0 +1,12 @@
+node_modules/
+client/node_modules/
+server/node_modules/
+client/dist/
+.env
+.env.*
+!.env.example
+client/.env
+server/.env
+npm-debug.log*
+.DS_Store
+coverage/
