@@ -124,7 +124,14 @@ function parseExpenseFilters(query) {
   return { filter, sort };
 }
 
-app.get('/api/health', (_req, res) => res.status(200).json({ success: true, message: 'ExpenseTrack API is running' }));
+app.get('/api/health', (_req, res) => {
+  const databaseReady = mongoose.connection.readyState === 1;
+  return res.status(databaseReady ? 200 : 503).json({
+    success: databaseReady,
+    api: 'running',
+    database: databaseReady ? 'connected' : 'disconnected'
+  });
+});
 
 app.post('/api/auth/register', authLimit, async (req, res, next) => {
   try {
@@ -219,5 +226,16 @@ if (production && clientUrl.startsWith('http://')) {
   console.error('Production CLIENT_URL must use HTTPS.');
   process.exit(1);
 }
-await mongoose.connect(process.env.MONGODB_URI, { autoIndex: production ? false : true });
+try {
+  await mongoose.connect(process.env.MONGODB_URI, {
+    autoIndex: !production,
+    serverSelectionTimeoutMS: 5000
+  });
+} catch (error) {
+  const detail = String(error?.message || 'Unknown connection error')
+    .replaceAll(process.env.MONGODB_URI, '[configured MONGODB_URI]');
+  console.error('MongoDB connection failed. Confirm MongoDB Community Server is running at 127.0.0.1:27017 and server/.env uses the local expensetrack URI.');
+  console.error(`MongoDB error: ${detail}`);
+  process.exit(1);
+}
 app.listen(port, () => console.log(`ExpenseTrack API listening on port ${port}`));
