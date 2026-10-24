@@ -1,4 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">
-  <rect width="40" height="40" rx="9" fill="#e8ece5"/>
-  <path d="M11 12h18M11 20h13M11 28h8" stroke="#465d49" stroke-width="3" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+  <title>TRAXER</title>
+  <rect x="2" y="2" width="36" height="36" fill="#e6e6e6" stroke="#191919" stroke-width="3"/>
+  <path d="M10 12h20M20 12v17" fill="none" stroke="#191919" stroke-width="5" stroke-linecap="square"/>
 </svg>

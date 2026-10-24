@@ -21,7 +21,7 @@ export async function request(path, { token, ...options } = {}) {
     });
   } catch (error) {
     if (error?.name === 'AbortError') throw error;
-    throw new ApiError('Could not reach ExpenseTrack. Check that the backend is running and try again.');
+    throw new ApiError('Could not reach TRAXER. Check that the backend is running and try again.');
   }
 
   if (response.status === 204) return null;

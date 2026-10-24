@@ -6,17 +6,45 @@ import rateLimit from 'express-rate-limit';
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { isIP } from 'node:net';
 
 const app = express();
 const port = Number(process.env.PORT) || 5000;
-const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+const configuredClientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
 const production = process.env.NODE_ENV === 'production';
 
+let clientOrigin;
+try {
+  const parsedClientUrl = new URL(configuredClientUrl);
+  if (!['http:', 'https:'].includes(parsedClientUrl.protocol) || parsedClientUrl.username || parsedClientUrl.password || parsedClientUrl.pathname !== '/' || parsedClientUrl.search || parsedClientUrl.hash) {
+    throw new Error();
+  }
+  clientOrigin = parsedClientUrl.origin;
+} catch {
+  console.error('CLIENT_URL must be a single HTTP or HTTPS origin without credentials, a path, or query parameters.');
+  process.exit(1);
+}
+
+const trustedProxies = (process.env.TRUSTED_PROXIES || '').split(',').map(value => value.trim()).filter(Boolean);
+const validProxyAddress = value => {
+  const [address, prefix, ...extra] = value.split('/');
+  const family = isIP(address);
+  if (!family || extra.length > 0) return false;
+  if (prefix === undefined) return true;
+  if (!/^\d{1,3}$/.test(prefix)) return false;
+  const bits = Number(prefix);
+  return bits > 0 && bits <= (family === 4 ? 32 : 128);
+};
+if (trustedProxies.some(proxy => !validProxyAddress(proxy))) {
+  console.error('TRUSTED_PROXIES must contain only explicit proxy IP addresses or CIDR ranges, separated by commas.');
+  process.exit(1);
+}
+
 app.disable('x-powered-by');
-app.set('trust proxy', production ? 1 : false);
-app.use(helmet());
+app.set('trust proxy', trustedProxies.length ? trustedProxies : false);
+app.use(helmet({ strictTransportSecurity: production ? undefined : false }));
 app.use(cors({
-  origin: clientUrl,
+  origin: clientOrigin,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: false
@@ -213,16 +241,25 @@ app.get('/api/admin/users', authenticate, requireAdmin, async (_req, res, next) 
 app.use((_req, res) => res.status(404).json({ success: false, message: 'Route not found.' }));
 app.use((err, _req, res, _next) => {
   if (err instanceof SyntaxError && 'body' in err) return res.status(400).json({ success: false, message: 'Invalid JSON request body.' });
+  if (err?.type === 'entity.too.large') return res.status(413).json({ success: false, message: 'Request body exceeds the 10 KB limit.' });
   if (err?.name === 'ValidationError' || err?.name === 'StrictModeError') return res.status(400).json({ success: false, message: 'Invalid request data.' });
-  console.error('Request failed:', err?.message || 'Unknown error');
+  console.error('Request failed:', err?.name || 'UnknownError');
   return res.status(500).json({ success: false, message: 'An unexpected server error occurred.' });
 });
 
-if (!process.env.MONGODB_URI || !process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32 || /replace_with|change_me|example/i.test(process.env.JWT_SECRET)) {
-  console.error('Set MONGODB_URI and a unique JWT_SECRET of at least 32 characters in the server environment.');
+const jwtSecret = process.env.JWT_SECRET || '';
+const secretCharacterCounts = new Map();
+for (const character of jwtSecret) secretCharacterCounts.set(character, (secretCharacterCounts.get(character) || 0) + 1);
+const secretEntropy = [...secretCharacterCounts.values()].reduce((total, count) => {
+  const probability = count / (jwtSecret.length || 1);
+  return total - probability * Math.log2(probability);
+}, 0);
+const hasStrongProductionSecret = Buffer.byteLength(jwtSecret, 'utf8') >= 32 && secretCharacterCounts.size >= 16 && secretEntropy >= 3.5 && !/^(.)\1+$/.test(jwtSecret);
+if (!process.env.MONGODB_URI || !jwtSecret || Buffer.byteLength(jwtSecret, 'utf8') < 32 || /replace_with|change_me|example/i.test(jwtSecret) || (production && !hasStrongProductionSecret)) {
+  console.error('Set MONGODB_URI and a unique, high-entropy JWT_SECRET of at least 32 bytes in the server environment.');
   process.exit(1);
 }
-if (production && clientUrl.startsWith('http://')) {
+if (production && new URL(clientOrigin).protocol !== 'https:') {
   console.error('Production CLIENT_URL must use HTTPS.');
   process.exit(1);
 }
@@ -232,10 +269,13 @@ try {
     serverSelectionTimeoutMS: 5000
   });
 } catch (error) {
-  const detail = String(error?.message || 'Unknown connection error')
-    .replaceAll(process.env.MONGODB_URI, '[configured MONGODB_URI]');
   console.error('MongoDB connection failed. Confirm MongoDB Community Server is running at 127.0.0.1:27017 and server/.env uses the local expensetrack URI.');
-  console.error(`MongoDB error: ${detail}`);
+  console.error(`MongoDB error type: ${error?.name || 'UnknownError'}${error?.code ? ` (code ${error.code})` : ''}`);
   process.exit(1);
 }
-app.listen(port, () => console.log(`ExpenseTrack API listening on port ${port}`));
+const server = app.listen(port, () => console.log(`TRAXER API listening on port ${port}`));
+server.on('error', error => {
+  const reason = error?.code === 'EADDRINUSE' ? 'the configured port is already in use' : 'verify the configured PORT and process permissions';
+  console.error(`HTTP server failed to start because ${reason}.`);
+  process.exit(1);
+});

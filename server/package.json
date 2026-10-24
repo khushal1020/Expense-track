@@ -1,5 +1,5 @@
 {
-  "name": "expensetrack-server",
+  "name": "traxer-server",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -11,7 +11,7 @@
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.7",
+    "dotenv": "^16.6.1",
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.0.0",

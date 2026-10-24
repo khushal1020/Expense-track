@@ -88,7 +88,7 @@ Do not use `--drop`. A restore without `--drop` does not delete existing collect
 - Register with `POST /api/auth/register` using `{ "email": "...", "password": "at-least-12-characters" }`, then send the returned bearer token in `Authorization` for protected routes.
 - `POST /api/auth/login` issues a one-hour token; `GET /api/auth/me` returns the current account.
 - Expense endpoints require authentication and restrict reads, updates, and deletes to the owning account. Registration cannot assign roles. Admin routes use a role check; promote a trusted account directly in MongoDB after verifying its email.
-- The API uses Helmet security headers, a single configured CORS origin, bounded JSON bodies, general and login/registration rate limits, validated expense inputs, bcrypt password hashes, and JWT issuer/audience/expiry checks.
+- The API uses Helmet security headers, a single configured CORS origin, bounded JSON bodies, general and login/registration rate limits, validated expense inputs, bcrypt password hashes, and JWT issuer/audience/expiry checks. By default, forwarded client IP headers are not trusted. If the API is behind a reverse proxy, set `TRUSTED_PROXIES` in `server/.env` to the exact proxy IP addresses or CIDR ranges (comma-separated); do not use a hop count or trust arbitrary forwarded addresses. The API rejects malformed proxy values and non-origin `CLIENT_URL` values.
 - MongoDB connection strings and JWT secrets belong only in the server environment. The local development URI does not require Atlas credentials. Rotate any credential that was previously committed or shared.
 
 The frontend remains a starter screen; connect it to the authentication and expense endpoints as a separate implementation step.

@@ -8,5 +8,9 @@ client/dist/
 client/.env
 server/.env
 npm-debug.log*
+*.log
+logs/
+/data/
+/server/data/
 .DS_Store
 coverage/
